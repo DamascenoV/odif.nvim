@@ -28,8 +28,8 @@ M.config = {
   hl = {
     prompt   = 'Question',
     query    = 'Normal',
-    match    = 'Pmenu',
-    current  = 'PmenuSel',
+    match    = 'LineNr',
+    current  = 'CursorLineNr',
     overflow = 'Comment',
     busy     = 'WarningMsg',
   },

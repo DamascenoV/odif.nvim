@@ -66,10 +66,9 @@ function M.paint(state)
     -- Greedy outward expansion centred on the current match, just like
     -- Emacs fido — keeps the current candidate visible as you cycle.
     local left, right = cur, cur
-    local function w_of(idx, current)
+    local function w_of(idx, is_current)
       local s = stritems[matches[idx]]
-      local t = current and ('[' .. s .. ']') or s
-      return vim.fn.strdisplaywidth(t)
+      return vim.fn.strdisplaywidth(s)
     end
 
     local total = w_of(cur, true)
@@ -98,16 +97,22 @@ function M.paint(state)
     -- Leading gap (so the strip doesn't kiss the query).
     push((' '):rep(gap), 'Normal')
     if left > 1 then push('… ', cfg.hl.overflow) end
+    -- Current match: highlighted with cfg.hl.current (PmenuSel by default).
     for i = left, right do
       if i > left then push(sep, cfg.hl.overflow) end
       local s = stritems[matches[i]]
       if i == cur then
-        push('[' .. s .. ']', cfg.hl.current)
+        push(s, cfg.hl.current)
       else
         push(s, cfg.hl.match)
       end
     end
     if right < #matches then push(' …', cfg.hl.overflow) end
+
+    -- Match count: "M/N" like Emacs fido.
+    if #matches > 0 then
+      push(' ' .. cur .. '/' .. #matches, cfg.hl.overflow)
+    end
   end
 
   -- 4) Place chunks as ONE inline virt_text run after the typed query.
