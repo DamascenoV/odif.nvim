@@ -4,8 +4,15 @@
 
 local LOG = '/tmp/odif-ui-test.log'
 local f = io.open(LOG, 'w')
-local function L(msg) f:write(msg .. '\n'); f:flush() end
-local function bail(msg) L('FAIL: ' .. msg); error(msg) end
+local function L(msg)
+  f:write(msg .. '\n')
+  f:flush()
+end
+local function bail(msg)
+  L('FAIL: ' .. msg)
+  io.stderr:write('FAIL: ' .. msg .. '\n')
+  vim.cmd('cquit 1')
+end
 
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
 vim.api.nvim_list_uis = function() return { { chan = 1 } } end
@@ -26,9 +33,13 @@ if #hits ~= 4 then bail('expected 4 hits, got ' .. #hits) end
 
 local render = require('odif.render')
 local state = {
-  ctx = ctx, config = odif.config,
-  query = 'lu', stritems = items,
-  matches = hits, current_ind = 2, busy = false,
+  ctx = ctx,
+  config = odif.config,
+  query = 'lu',
+  stritems = items,
+  matches = hits,
+  current_ind = 2,
+  busy = false,
 }
 render.paint(state)
 
@@ -37,25 +48,25 @@ L('line[1]=' .. vim.inspect(lines[1]))
 if not lines[1]:find('odif❭', 1, true) then bail('prompt missing') end
 if not lines[1]:find('lu', 1, true) then bail('query missing') end
 
-local marks = vim.api.nvim_buf_get_extmarks(ctx.buf, ctx.ns, 0, -1,
-  { details = true })
+local marks = vim.api.nvim_buf_get_extmarks(ctx.buf, ctx.ns, 0, -1, { details = true })
 L('extmarks=' .. #marks)
 if #marks < 2 then bail('expected ≥2 extmarks') end
 
+local current_hl = odif.config.hl.current
 local has_current, current_text = false, nil
 for _, m in ipairs(marks) do
   local d = m[4]
   if d and d.virt_text then
     for _, vt in ipairs(d.virt_text) do
-      if vt[1]:find('%[') then
+      if vt[2] == current_hl then
         has_current = true
         current_text = vt[1]
       end
     end
   end
 end
-if not has_current then bail('no [current] virt_text chunk') end
-L('current chunk=' .. current_text)
+if not has_current then bail('no chunk highlighted with ' .. current_hl) end
+L('current chunk=' .. current_text .. ' (hl=' .. current_hl .. ')')
 
 bridge.release(ctx)
 L('UI TEST OK')

@@ -3,7 +3,7 @@
 --- `vim.schedule` so they run on the main loop and may touch the API.
 
 local M = {}
-local uv = vim.uv or vim.loop
+local uv = vim.uv
 
 ---@param cmd string[]                     argv
 ---@param on_lines fun(lines: string[])    called with each batch
@@ -16,7 +16,7 @@ function M.lines(cmd, on_lines, on_exit)
   local handle
 
   handle = uv.spawn(cmd[1], {
-    args  = vim.list_slice(cmd, 2),
+    args = vim.list_slice(cmd, 2),
     stdio = { nil, stdout, stderr },
   }, function(code)
     if stdout and not stdout:is_closing() then stdout:close() end
@@ -47,19 +47,15 @@ function M.lines(cmd, on_lines, on_exit)
     for line in complete:gmatch('([^\n]*)\n') do
       lines[#lines + 1] = line
     end
-    if #lines > 0 then
-      vim.schedule(function() on_lines(lines) end)
-    end
+    if #lines > 0 then vim.schedule(function() on_lines(lines) end) end
   end)
 
   -- Drain stderr quietly so the pipe doesn't fill.
-  stderr:read_start(function(_, _) end)
+  stderr:read_start(function() end)
 
   return {
     kill = function()
-      if handle and not handle:is_closing() then
-        pcall(handle.kill, handle, 'sigterm')
-      end
+      if handle and not handle:is_closing() then pcall(handle.kill, handle, 'sigterm') end
     end,
   }
 end

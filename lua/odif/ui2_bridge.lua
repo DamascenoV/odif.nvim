@@ -20,12 +20,12 @@ function M.acquire()
   return {
     buf = ui2.bufs.cmd,
     win = ui2.wins.cmd,
-    ns  = NS,
+    ns = NS,
     ui2 = ui2,
     saved = {
-      height    = vim.api.nvim_win_get_height(ui2.wins.cmd),
+      height = vim.api.nvim_win_get_height(ui2.wins.cmd),
       cmdheight = vim.o.cmdheight,
-      hidden    = cfg.hide or false,
+      hidden = cfg.hide or false,
     },
   }
 end
@@ -37,10 +37,9 @@ end
 ---@param min_height integer
 function M.ensure_visible(ctx, min_height)
   local want = math.max(min_height, ctx.saved.cmdheight, 1)
-  local cfg  = vim.api.nvim_win_get_config(ctx.win)
+  local cfg = vim.api.nvim_win_get_config(ctx.win)
   if cfg.hide or vim.api.nvim_win_get_height(ctx.win) ~= want then
-    pcall(vim.api.nvim_win_set_config, ctx.win,
-      { hide = false, height = want })
+    pcall(vim.api.nvim_win_set_config, ctx.win, { hide = false, height = want })
   end
 end
 
@@ -52,14 +51,10 @@ end
 ---@param desired integer
 function M.set_height(ctx, desired)
   local want = math.max(desired, ctx.saved.cmdheight, 1)
-  if vim.api.nvim_win_get_height(ctx.win) ~= want then
-    pcall(vim.api.nvim_win_set_height, ctx.win, want)
-  end
+  if vim.api.nvim_win_get_height(ctx.win) ~= want then pcall(vim.api.nvim_win_set_height, ctx.win, want) end
   if vim.o.cmdheight ~= want then
     -- Mirror ui2's own pattern: keep cursor stable, suppress autocmds.
-    vim._with({ noautocmd = true, o = { splitkeep = 'screen' } }, function()
-      vim.o.cmdheight = want
-    end)
+    vim._with({ noautocmd = true, o = { splitkeep = 'screen' } }, function() vim.o.cmdheight = want end)
   end
 end
 
@@ -72,16 +67,14 @@ function M.release(ctx)
 
   -- Restore window geometry to what we found on acquire.
   pcall(vim.api.nvim_win_set_config, ctx.win, {
-    hide   = ctx.saved.hidden,
+    hide = ctx.saved.hidden,
     height = math.max(1, ctx.saved.height),
   })
 
   -- Restore cmdheight (we may have grown it above the user's value to
   -- make room for the picker). Mirror ui2's noautocmd pattern.
   if vim.o.cmdheight ~= ctx.saved.cmdheight then
-    vim._with({ noautocmd = true, o = { splitkeep = 'screen' } }, function()
-      vim.o.cmdheight = ctx.saved.cmdheight
-    end)
+    vim._with({ noautocmd = true, o = { splitkeep = 'screen' } }, function() vim.o.cmdheight = ctx.saved.cmdheight end)
   end
 end
 

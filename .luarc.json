@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime.version": "LuaJIT",
+  "workspace.checkThirdParty": "Disable",
+  "workspace.library": [
+    "$VIMRUNTIME/lua",
+    "$VIMRUNTIME/lua/vim/lsp"
+  ],
+  "diagnostics.globals": ["vim"],
+  "diagnostics.disable": [
+    "missing-fields",
+    "incomplete-signature-doc"
+  ]
+}

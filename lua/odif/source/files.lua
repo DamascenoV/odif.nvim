@@ -17,9 +17,7 @@ return {
   items = function(set)
     -- Bring the picker up empty, then stream the listing in.
     set({})
-    vim.schedule(function()
-      require('odif').set_items_from_cli(pick_command())
-    end)
+    vim.schedule(function() require('odif').set_items_from_cli(pick_command()) end)
   end,
   format_item = function(it) return it end,
   choose = function(it)
@@ -31,8 +29,6 @@ return {
   preview = function(it, target_win)
     if not it or it == '' then return end
     if vim.fn.filereadable(it) ~= 1 then return end
-    vim.api.nvim_win_call(target_win, function()
-      vim.cmd('edit ' .. vim.fn.fnameescape(it))
-    end)
+    vim.api.nvim_win_call(target_win, function() vim.cmd('edit ' .. vim.fn.fnameescape(it)) end)
   end,
 }

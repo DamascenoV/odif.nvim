@@ -25,13 +25,9 @@ return {
   end,
   format_item = function(it) return it end,
   choose = function(it)
-    if it then
-      vim.cmd('help ' .. vim.fn.escape(it, ' \\|"'))
-    end
+    if it then vim.cmd('help ' .. vim.fn.escape(it, ' \\|"')) end
   end,
   choose_literal = function(text)
-    if text and text ~= '' then
-      vim.cmd('help ' .. vim.fn.escape(text, ' \\|"'))
-    end
+    if text and text ~= '' then vim.cmd('help ' .. vim.fn.escape(text, ' \\|"')) end
   end,
 }

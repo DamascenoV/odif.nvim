@@ -25,7 +25,9 @@ print('matcher hits:', vim.inspect(vim.tbl_map(function(i) return items[i] end, 
 -- empty query → all items in original order
 local all = match.run(items, '', true)
 assert(#all == #items)
-for i = 1, #items do assert(all[i] == i) end
+for i = 1, #items do
+  assert(all[i] == i)
+end
 
 -- no match
 local none = match.run(items, 'zzzzz', true)
@@ -37,13 +39,13 @@ assert(rank[1] == 1, 'foo_bar should rank first')
 print('ranking OK')
 
 -- 3) public API surface — resume/ui_select are present even without UI.
-assert(type(odif.start)         == 'function', 'start missing')
-assert(type(odif.stop)          == 'function', 'stop missing')
-assert(type(odif.resume)        == 'function', 'resume missing')
-assert(type(odif.set_items)     == 'function', 'set_items missing')
-assert(type(odif.append_items)  == 'function', 'append_items missing')
+assert(type(odif.start) == 'function', 'start missing')
+assert(type(odif.stop) == 'function', 'stop missing')
+assert(type(odif.resume) == 'function', 'resume missing')
+assert(type(odif.set_items) == 'function', 'set_items missing')
+assert(type(odif.append_items) == 'function', 'append_items missing')
 assert(type(odif.set_items_from_cli) == 'function', 'set_items_from_cli missing')
-assert(type(odif.ui_select)     == 'function', 'ui_select missing')
+assert(type(odif.ui_select) == 'function', 'ui_select missing')
 print('public API OK')
 
 -- resume with no prior session must warn, not crash.
@@ -66,9 +68,13 @@ print('ui2 cmd buf=' .. ctx.buf .. ' win=' .. ctx.win)
 
 local render = require('odif.render')
 local state = {
-  ctx = ctx, config = odif.config,
-  query = 'lu', stritems = items,
-  matches = hits, current_ind = 1, busy = false,
+  ctx = ctx,
+  config = odif.config,
+  query = 'lu',
+  stritems = items,
+  matches = hits,
+  current_ind = 1,
+  busy = false,
 }
 local ok_paint, err = pcall(render.paint, state)
 assert(ok_paint, 'paint failed: ' .. tostring(err))

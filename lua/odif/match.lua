@@ -19,7 +19,10 @@ local function fuzzy_window(s, query)
       if s:byte(i) == query:byte(qi) then
         if qi == 1 then first = i end
         qi = qi + 1
-        if qi > len then last = i; break end
+        if qi > len then
+          last = i
+          break
+        end
       end
     end
     if not last then return nil end
@@ -35,7 +38,10 @@ local function fuzzy_window(s, query)
       if s:byte(i) == query:byte(qi) then
         if qi == 1 then new_first = i end
         qi = qi + 1
-        if qi > len then new_last = i; break end
+        if qi > len then
+          new_last = i
+          break
+        end
       end
     end
     if not new_last then break end
@@ -57,7 +63,9 @@ end
 function M.run(stritems, query, ignorecase)
   if query == '' then
     local out = {}
-    for i = 1, #stritems do out[i] = i end
+    for i = 1, #stritems do
+      out[i] = i
+    end
     return out
   end
 
@@ -66,7 +74,9 @@ function M.run(stritems, query, ignorecase)
   q = q:gsub('%s+', '')
   if q == '' then
     local out = {}
-    for i = 1, #stritems do out[i] = i end
+    for i = 1, #stritems do
+      out[i] = i
+    end
     return out
   end
 
@@ -75,7 +85,7 @@ function M.run(stritems, query, ignorecase)
   for i, s in ipairs(stritems) do
     local cand = ignorecase and s:lower() or s
     local w, st = fuzzy_window(cand, q)
-    if w then
+    if w and st then
       hits[#hits + 1] = { w, st, i }
       if w > max_w then max_w = w end
       if st > max_s then max_s = st end
@@ -90,7 +100,9 @@ function M.run(stritems, query, ignorecase)
   end)
 
   local out = {}
-  for i, h in ipairs(hits) do out[i] = h[3] end
+  for i, h in ipairs(hits) do
+    out[i] = h[3]
+  end
   return out
 end
 
@@ -117,7 +129,9 @@ function M.run_async(stritems, query, ignorecase, opts, on_done)
     vim.schedule(function()
       if stale() then return end
       local out = {}
-      for i = 1, #stritems do out[i] = i end
+      for i = 1, #stritems do
+        out[i] = i
+      end
       on_done(out)
     end)
     return { cancel = function() end }
@@ -133,7 +147,7 @@ function M.run_async(stritems, query, ignorecase, opts, on_done)
     for j = i, stop do
       local cand = ignorecase and stritems[j]:lower() or stritems[j]
       local w, st = fuzzy_window(cand, q)
-      if w then hits[#hits + 1] = { w, st, j } end
+      if w and st then hits[#hits + 1] = { w, st, j } end
     end
     i = stop + 1
     if i > #stritems then
@@ -144,7 +158,9 @@ function M.run_async(stritems, query, ignorecase, opts, on_done)
         return a[3] < b[3]
       end)
       local out = {}
-      for k, h in ipairs(hits) do out[k] = h[3] end
+      for k, h in ipairs(hits) do
+        out[k] = h[3]
+      end
       on_done(out)
     else
       vim.schedule(step)

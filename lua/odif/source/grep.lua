@@ -31,8 +31,15 @@ return {
     end
     if not pick_command() then return end
     odif.set_items_from_cli({
-      'rg', '--column', '--line-number', '--no-heading',
-      '--color=never', '--smart-case', '--', query, '.',
+      'rg',
+      '--column',
+      '--line-number',
+      '--no-heading',
+      '--color=never',
+      '--smart-case',
+      '--',
+      query,
+      '.',
     })
   end,
 

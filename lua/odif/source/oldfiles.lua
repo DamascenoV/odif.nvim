@@ -10,9 +10,7 @@ return {
       if f and f ~= '' and vim.fn.filereadable(f) == 1 then
         -- Show paths relative to cwd when applicable for readability.
         local display = f
-        if f:sub(1, #cwd) == cwd then
-          display = f:sub(#cwd + 2)
-        end
+        if f:sub(1, #cwd) == cwd then display = f:sub(#cwd + 2) end
         out[#out + 1] = { path = f, display = display }
       end
     end

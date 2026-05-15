@@ -66,29 +66,31 @@ function M.paint(state)
     -- Greedy outward expansion centred on the current match, just like
     -- Emacs fido — keeps the current candidate visible as you cycle.
     local left, right = cur, cur
-    local function w_of(idx, is_current)
-      local s = stritems[matches[idx]]
-      return vim.fn.strdisplaywidth(s)
+    local function w_of(idx)
+      return vim.fn.strdisplaywidth(stritems[matches[idx]])
     end
 
-    local total = w_of(cur, true)
+    local total = w_of(cur)
     while total < budget and (left > 1 or right < #matches) do
-      local can_left  = left > 1
+      local can_left = left > 1
       local can_right = right < #matches
       if can_right then
-        local w = w_of(right + 1, false) + #sep
+        local w = w_of(right + 1) + #sep
         if total + w > budget and can_left then
-          local wl = w_of(left - 1, false) + #sep
+          local wl = w_of(left - 1) + #sep
           if total + wl > budget then break end
-          left = left - 1; total = total + wl
+          left = left - 1
+          total = total + wl
         else
           if total + w > budget then break end
-          right = right + 1; total = total + w
+          right = right + 1
+          total = total + w
         end
       elseif can_left then
-        local wl = w_of(left - 1, false) + #sep
+        local wl = w_of(left - 1) + #sep
         if total + wl > budget then break end
-        left = left - 1; total = total + wl
+        left = left - 1
+        total = total + wl
       else
         break
       end
@@ -110,9 +112,7 @@ function M.paint(state)
     if right < #matches then push(' …', cfg.hl.overflow) end
 
     -- Match count: "M/N" like Emacs fido.
-    if #matches > 0 then
-      push(' ' .. cur .. '/' .. #matches, cfg.hl.overflow)
-    end
+    if #matches > 0 then push(' ' .. cur .. '/' .. #matches, cfg.hl.overflow) end
   end
 
   -- 4) Place chunks as ONE inline virt_text run after the typed query.
@@ -153,7 +153,8 @@ function M.paint_prompt_only(state)
   vim.api.nvim_buf_set_extmark(ctx.buf, ctx.ns, 0, 0, {
     end_col = #prompt,
     hl_group = state.busy and cfg.hl.busy or cfg.hl.prompt,
-    invalidate = true, undo_restore = false,
+    invalidate = true,
+    undo_restore = false,
   })
   local caret = state.caret or (#query + 1)
   if caret <= #query then

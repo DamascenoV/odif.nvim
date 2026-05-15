@@ -21,6 +21,16 @@ local M = {}
 ---@field current_ind integer cursor position inside `matches`
 ---@field busy boolean
 ---@field aborted boolean
+---@field target_win integer
+---@field target_buf integer
+---@field target_pos integer[]
+---@field preview boolean
+---@field last_preview_ind integer|nil
+---@field _spawn { kill: fun() }|nil
+---@field _match_ticket { cancel: fun() }|nil
+---@field _refresh_timer any|nil    -- uv_timer_t
+---@field _paint_timer any|nil      -- uv_timer_t
+---@field _live_querytick integer|nil
 
 --- Build string projections for items.
 ---@param items any[]
@@ -40,9 +50,7 @@ local function project(items, format)
 end
 
 --- Recompute `state.matches` from current query (delegates to async refresh).
-local function rematch(state)
-  require('odif')._refresh(state)
-end
+local function rematch(state) require('odif')._refresh(state) end
 
 --- If preview is on and `current_ind` has moved, ask the source to preview.
 local function maybe_preview(state)
@@ -51,9 +59,7 @@ local function maybe_preview(state)
   if ind == state.last_preview_ind then return end
   state.last_preview_ind = ind
   local item = ind > 0 and state.items[state.matches[ind]] or nil
-  if item and state.source.preview
-    and vim.api.nvim_win_is_valid(state.target_win)
-  then
+  if item and state.source.preview and vim.api.nvim_win_is_valid(state.target_win) then
     pcall(state.source.preview, item, state.target_win)
   end
 end
@@ -69,15 +75,15 @@ local function walk_utf8(s, byte, n)
       local len = (b < 0x80) and 1
         or (b < 0xc0) and 1 -- shouldn't happen on a lead byte; safety
         or (b < 0xe0) and 2
-        or (b < 0xf0) and 3 or 4
+        or (b < 0xf0) and 3
+        or 4
       byte = math.min(#s + 1, byte + len)
     end
   else
     for _ = 1, -n do
       if byte <= 1 then break end
       byte = byte - 1
-      while byte > 1 and (s:byte(byte) or 0) >= 0x80
-        and (s:byte(byte) or 0) < 0xc0 do
+      while byte > 1 and (s:byte(byte) or 0) >= 0x80 and (s:byte(byte) or 0) < 0xc0 do
         byte = byte - 1
       end
     end
@@ -100,45 +106,41 @@ local function classify(ch)
   if ch == '' then return 'noop' end
   -- Handle terminal/control bytes.
   local b = ch:byte(1)
-  if ch == '\27' then return 'abort' end          -- <Esc>
-  if ch == '\3'  then return 'abort' end          -- <C-c>
+  if ch == '\27' then return 'abort' end -- <Esc>
+  if ch == '\3' then return 'abort' end -- <C-c>
   -- NB: \n (0x0a) is <C-j>, not <CR>. fido binds it to choose_literal.
   if ch == '\10' then return 'choose_literal' end -- <C-j>  (fido M-j parity)
-  if ch == '\r'  then return 'choose' end         -- <CR>
-  if ch == '\t'  then return 'preview_toggle' end -- <Tab>
+  if ch == '\r' then return 'choose' end -- <CR>
+  if ch == '\t' then return 'preview_toggle' end -- <Tab>
   if ch == '\8' or ch == '\127' then return 'bs' end
-  if ch == '\14' then return 'next' end           -- <C-n>
-  if ch == '\16' then return 'prev' end           -- <C-p>
-  if ch == '\19' then return 'next' end           -- <C-s>  (fido)
-  if ch == '\18' then return 'prev' end           -- <C-r>  (fido)
-  if ch == '\21' then return 'clear' end          -- <C-u>
-  if ch == '\23' then return 'word_back' end      -- <C-w>
-  if ch == '\4'  then return 'choose_literal' end -- <C-d>  (fido)
+  if ch == '\14' then return 'next' end -- <C-n>
+  if ch == '\16' then return 'prev' end -- <C-p>
+  if ch == '\19' then return 'next' end -- <C-s>  (fido)
+  if ch == '\18' then return 'prev' end -- <C-r>  (fido)
+  if ch == '\21' then return 'clear' end -- <C-u>
+  if ch == '\23' then return 'word_back' end -- <C-w>
+  if ch == '\4' then return 'choose_literal' end -- <C-d>  (fido)
 
   -- Multi-byte / special keys returned by getcharstr() as <80>... sequences
   -- come back from vim.fn.keytrans for legibility.
   local k = vim.fn.keytrans(ch)
-  if k == '<Down>'  then return 'next' end
-  if k == '<Up>'    then return 'prev' end
+  if k == '<Down>' then return 'next' end
+  if k == '<Up>' then return 'prev' end
   if k == '<Right>' then return 'caret_right' end -- caret in query
-  if k == '<Left>'  then return 'caret_left' end  -- caret in query
-  if k == '<Home>'  then return 'caret_home' end
-  if k == '<End>'   then return 'caret_end' end
-  if k == '<BS>'    then return 'bs' end
-  if k == '<Del>'   then return 'del' end
-  if k == '<CR>'    then return 'choose' end
-  if k == '<Esc>'   then return 'abort' end
+  if k == '<Left>' then return 'caret_left' end -- caret in query
+  if k == '<Home>' then return 'caret_home' end
+  if k == '<End>' then return 'caret_end' end
+  if k == '<BS>' then return 'bs' end
+  if k == '<Del>' then return 'del' end
+  if k == '<CR>' then return 'choose' end
+  if k == '<Esc>' then return 'abort' end
   if k == '<C-Home>' then return 'first' end
-  if k == '<C-End>'  then return 'last'  end
+  if k == '<C-End>' then return 'last' end
 
   -- Anything else printable goes into the query.
-  if b and b >= 0x20 and b < 0x7f then
-    return 'insert', ch
-  end
+  if b and b >= 0x20 and b < 0x7f then return 'insert', ch end
   -- UTF-8 lead bytes too.
-  if b and b >= 0x80 then
-    return 'insert', ch
-  end
+  if b and b >= 0x80 then return 'insert', ch end
   return 'noop'
 end
 
@@ -158,13 +160,15 @@ function M.run(source, config, opts)
   bridge.ensure_visible(ctx, 1)
 
   -- Resolve items (sync only in v0).
-  local items
+  ---@type any[]
+  local items = {}
   if type(source.items) == 'function' then
+    ---@type any[]?
     local resolved
-    source.items(function(it) resolved = it end)
+    (source.items --[[@as fun(set: fun(items: any[]))]])(function(it) resolved = it end)
     items = resolved or {}
-  else
-    items = source.items or {}
+  elseif type(source.items) == 'table' then
+    items = source.items --[[@as any[] ]]
   end
 
   local initial_query = opts.initial_query or ''
@@ -173,11 +177,11 @@ function M.run(source, config, opts)
   local state = {
     source = source,
     config = config,
-    ctx    = ctx,
-    items  = items,
+    ctx = ctx,
+    items = items,
     stritems = project(items, source.format_item),
-    query  = initial_query,
-    caret  = #initial_query + 1,
+    query = initial_query,
+    caret = #initial_query + 1,
     querytick = 0,
     matches = {},
     current_ind = 1,
@@ -187,7 +191,7 @@ function M.run(source, config, opts)
     target_win = target_win,
     target_buf = target_buf,
     target_pos = target_pos,
-    preview = false,        -- preview toggle
+    preview = false, -- preview toggle
     last_preview_ind = nil, -- to avoid re-previewing the same item
   }
   require('odif')._active = state
@@ -210,9 +214,7 @@ function M.run(source, config, opts)
       end
       break
     elseif action == 'choose_literal' then
-      if source.choose_literal then
-        source.choose_literal(state.query)
-      end
+      if source.choose_literal then source.choose_literal(state.query) end
       break
     elseif action == 'insert' then
       splice(state, state.caret, state.caret, arg)
@@ -246,13 +248,9 @@ function M.run(source, config, opts)
     elseif action == 'caret_end' then
       state.caret = #state.query + 1
     elseif action == 'next' then
-      if #state.matches > 0 then
-        state.current_ind = state.current_ind % #state.matches + 1
-      end
+      if #state.matches > 0 then state.current_ind = state.current_ind % #state.matches + 1 end
     elseif action == 'prev' then
-      if #state.matches > 0 then
-        state.current_ind = (state.current_ind - 2) % #state.matches + 1
-      end
+      if #state.matches > 0 then state.current_ind = (state.current_ind - 2) % #state.matches + 1 end
     elseif action == 'first' then
       if #state.matches > 0 then state.current_ind = 1 end
     elseif action == 'last' then
@@ -260,7 +258,8 @@ function M.run(source, config, opts)
     elseif action == 'preview_toggle' then
       state.preview = not state.preview
       state.last_preview_ind = nil
-      if not state.preview
+      if
+        not state.preview
         and vim.api.nvim_win_is_valid(state.target_win)
         and vim.api.nvim_buf_is_valid(state.target_buf)
       then
@@ -285,7 +284,9 @@ function M.run(source, config, opts)
   end
 
   -- If we previewed but the user aborted, restore the target window.
-  if state.preview and chosen == nil
+  if
+    state.preview
+    and chosen == nil
     and vim.api.nvim_win_is_valid(state.target_win)
     and vim.api.nvim_buf_is_valid(state.target_buf)
   then
@@ -296,9 +297,7 @@ function M.run(source, config, opts)
   bridge.release(ctx)
   require('odif')._active = nil
 
-  if chosen ~= nil and source.choose then
-    source.choose(chosen)
-  end
+  if chosen ~= nil and source.choose then source.choose(chosen) end
   return chosen, { query = state.query }
 end
 
