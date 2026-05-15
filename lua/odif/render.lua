@@ -66,9 +66,7 @@ function M.paint(state)
     -- Greedy outward expansion centred on the current match, just like
     -- Emacs fido — keeps the current candidate visible as you cycle.
     local left, right = cur, cur
-    local function w_of(idx)
-      return vim.fn.strdisplaywidth(stritems[matches[idx]])
-    end
+    local function w_of(idx) return vim.fn.strdisplaywidth(stritems[matches[idx]]) end
 
     local total = w_of(cur)
     while total < budget and (left > 1 or right < #matches) do
