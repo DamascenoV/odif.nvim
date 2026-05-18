@@ -5,6 +5,7 @@ local M = {}
 
 ---@class odif.Source
 ---@field name? string
+---@field prompt? string Override the prompt string for this source.
 ---@field items string[]|fun(set: fun(items: any[])) Either an array or
 ---  an async producer that calls `set(items)` when ready.
 ---@field format_item? fun(item: any): string
@@ -16,16 +17,23 @@ local M = {}
 ---@field refresh? fun(query: string) Required for live sources.
 
 ---@class odif.Config
----@field prompt string
+---@field prompt string                Default prompt; overridden by `source.prompt`.
+---@field prompt_from_source boolean   If true and no `source.prompt`, derive
+---  from `source.name` as "<name>: " (Emacs-fido style).
 ---@field separator string
+---@field show_count boolean           Show trailing "M/N" counter.
+---@field max_height integer           Max cmdline rows for the strip.
 ---@field hl table<string, string>
 ---@field delay { busy: integer, async: integer }
----@field mappings table<string, string>
+---@field mappings table<string, string>  Map of key (literal char or `<C-x>`
+---  keytrans form) to action name. Overrides built-in defaults.
 
 ---@type odif.Config
 M.config = {
   prompt = 'odif❭ ',
+  prompt_from_source = true,
   separator = ' │ ',
+  show_count = true,
   -- Maximum number of cmdline rows the picker is allowed to expand to.
   -- Honour the same value you pass to ui2's `msg.cmd.height`.
   max_height = 2,
@@ -38,7 +46,9 @@ M.config = {
     busy = 'WarningMsg',
   },
   delay = { busy = 80, async = 10 },
-  mappings = {}, -- reserved
+  -- User overrides; merged on top of the defaults in odif.controller.
+  -- Example: { ['<C-x>'] = 'choose_literal', ['<C-l>'] = 'clear' }
+  mappings = {},
 }
 
 --- Built-in source registry; populated by `:Odif <name>`.

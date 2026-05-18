@@ -2,6 +2,7 @@
 
 return {
   name = 'buffers',
+  prompt = 'Switch to buffer: ',
   items = function(set)
     local items = {}
     for _, b in ipairs(vim.api.nvim_list_bufs()) do

@@ -1,0 +1,233 @@
+*odif.txt*  Fido-horizontal picker that lives in the cmdline (no floats)
+
+                                                          *odif* *odif.nvim*
+
+Author:  vdamasceno
+License: MIT
+Repo:    https://github.com/vdamasceno/odif.nvim
+
+==============================================================================
+CONTENTS                                                     *odif-contents*
+
+  1. Introduction ........................... |odif-introduction|
+  2. Requirements ........................... |odif-requirements|
+  3. Setup .................................. |odif-setup|
+  4. Commands ............................... |odif-commands|
+  5. Sources ................................ |odif-sources|
+  6. Mappings ............................... |odif-mappings|
+  7. Configuration .......................... |odif-config|
+  8. Lua API ................................ |odif-api|
+  9. Writing a source ....................... |odif-source-spec|
+
+==============================================================================
+1. INTRODUCTION                                          *odif-introduction*
+
+`odif` is a minimal picker for Neovim modeled after Emacs `fido-mode` /
+`icomplete-mode`. Unlike most pickers it does NOT open a floating window
+or a popup menu. Candidates render inline, on the right of the typed
+query, inside the cmdline buffer supplied by the experimental
+`vim._core.ui2`. The whole picker is the cmdline.
+
+Layout:
+>
+  Find file: src/co  init.lua │ controller.lua │ render.lua │ match.lua  3/127
+<
+The current candidate is highlighted; <CR> picks it. <Tab> toggles a
+preview by temporarily replacing the target window's buffer (no floats).
+
+==============================================================================
+2. REQUIREMENTS                                          *odif-requirements*
+
+  * Neovim 0.12+ (uses `vim._core.ui2`, which lives under an underscored
+    path on purpose).
+  * For the |odif-source-files| source: `rg`, `fd`, or `find`.
+  * For the |odif-source-grep| source: `rg`.
+
+==============================================================================
+3. SETUP                                                        *odif-setup*
+
+Add to runtimepath and enable: >
+    vim.opt.runtimepath:prepend('/path/to/odif')
+
+    -- ui2 is experimental; you must enable it.
+    require('vim._core.ui2').enable({})
+
+    require('odif').setup({
+      -- optional overrides; see |odif-config|
+    })
+<
+==============================================================================
+4. COMMANDS                                                  *odif-commands*
+
+                                                                       *:Odif*
+:Odif {source}      Open the named picker (e.g. `:Odif files`,
+                    `:Odif grep`, `:Odif buffers`). Completion lists all
+                    registered sources.
+
+:Odif resume        Re-open the previous picker, restoring its query.
+
+==============================================================================
+5. SOURCES                                                    *odif-sources*
+
+The following built-in sources are registered by |odif.setup()|.
+
+                                                          *odif-source-files*
+files       Stream files under cwd. Uses `rg --files`, falls back to
+            `fd`, then `find`. Picks open the file with |:edit|.
+
+                                                        *odif-source-buffers*
+buffers     Listed, loaded buffers. Picks `:buffer <bufnr>`.
+
+                                                       *odif-source-oldfiles*
+oldfiles    `vim.v.oldfiles` filtered to readable files.
+
+                                                           *odif-source-help*
+help        All help tags under runtimepath. <CR> opens the tag; <C-j>
+            opens whatever you typed verbatim with `:help <text>`.
+
+                                                           *odif-source-grep*
+grep        Live ripgrep. Each query change re-spawns `rg` (debounced
+            ~120ms). Items are `file:line:col:text`. Live source: the
+            local fuzzy matcher is bypassed; ripgrep does the filtering.
+
+                                                    *odif-source-lsp_symbols*
+lsp_symbols Document symbols for the current buffer via LSP.
+
+==============================================================================
+6. MAPPINGS                                                  *odif-mappings*
+
+Default keys (fido parity):
+
+  Key                                Action ~
+  ---------------------------------- -------------------------------
+  printable                          extend query
+  <BS> / <Del>                       delete char before / under caret
+  <C-u>                              clear query
+  <C-w>                              delete word back
+  <Left> / <Right>                   move caret in query
+  <Home> / <End>                     caret to start / end of query
+  <C-n> <Down> <C-s>                 next match
+  <C-p> <Up>   <C-r>                 prev match
+  <C-Home> / <C-End>                 first / last match
+  <CR>                               choose current match
+  <C-j> / <C-d>                      accept literal query
+  <Tab>                              toggle preview
+  <Esc> / <C-c>                      abort
+
+All bindings are configurable via `config.mappings`; see |odif-config|.
+
+==============================================================================
+7. CONFIGURATION                                               *odif-config*
+
+`require('odif').setup({...})` deep-merges into the defaults below. >
+
+    {
+      prompt = 'odif❭ ',
+      prompt_from_source = true,   -- '<name>: ' if source has no .prompt
+      separator = ' │ ',
+      show_count = true,           -- trailing M/N counter
+      max_height = 2,              -- cmdline rows the strip can wrap to
+
+      hl = {
+        prompt   = 'Question',
+        query    = 'Normal',
+        match    = 'Normal',
+        current  = 'CursorLineNr',
+        overflow = 'Comment',
+        busy     = 'WarningMsg',
+      },
+
+      delay = { busy = 80, async = 10 },
+
+      -- Per-key overrides. Value is an action name (see |odif-mappings|)
+      -- or `false` to remove a default binding.
+      --
+      -- Keys can be raw bytes ('\t') or keytrans forms ('<C-x>').
+      mappings = {
+        -- ['<C-x>'] = 'choose_literal',
+        -- ['<Tab>'] = false,
+      },
+    }
+<
+Per-source prompts:                                       *odif-source-prompt*
+
+A source may declare its own `prompt` field which always wins, e.g.
+`{ name = 'files', prompt = 'Find file: ', ... }`. If a source has no
+`prompt` and `config.prompt_from_source` is true (default), the prompt
+is derived from the source name as `'<name>: '`. Otherwise the global
+`config.prompt` is used.
+
+==============================================================================
+8. LUA API                                                        *odif-api*
+
+                                                              *odif.setup()*
+require('odif').setup({opts})
+    Merge {opts} into defaults and register built-in sources. Idempotent.
+
+                                                              *odif.start()*
+require('odif').start({source = src, initial_query = ''})
+    Start a picker session with the given source table. Blocks (yielding
+    to the event loop) until the user picks or aborts. Returns the
+    chosen item (or nil).
+
+                                                             *odif.resume()*
+require('odif').resume()
+    Re-open the previous session with its query restored.
+
+                                                               *odif.stop()*
+require('odif').stop()
+    Abort the currently active session, if any.
+
+                                                          *odif.is_active()*
+require('odif').is_active()
+    True iff a picker is currently running.
+
+                                                          *odif.ui_select()*
+require('odif').ui_select(items, opts, on_choice)
+    Drop-in replacement for |vim.ui.select|: >
+        vim.ui.select = require('odif').ui_select
+<
+                                                          *odif.set_items()*
+require('odif').set_items(items)
+    Replace the active picker's items. Mostly used by source callbacks.
+
+                                                       *odif.append_items()*
+require('odif').append_items(items)
+    Append items (throttled ~60ms repaint). Used by streaming sources.
+
+                                                  *odif.set_items_from_cli()*
+require('odif').set_items_from_cli({cmd, args...})
+    Spawn a process and stream its stdout lines as items.
+
+                                                            *odif.registry*
+require('odif').registry
+    Table of built-in sources keyed by name (`files`, `buffers`, …).
+
+==============================================================================
+9. WRITING A SOURCE                                       *odif-source-spec*
+
+A source is a plain table: >
+
+    {
+      name           = 'thing',           -- optional, used for prompt
+      prompt         = 'Thing: ',         -- optional, overrides prompt
+
+      -- items can be an array OR an async producer:
+      items          = function(set) set({ ... }) end,
+      -- or:
+      -- items       = { 'one', 'two', 'three' },
+
+      format_item    = function(it) return tostring(it) end,
+      choose         = function(it) ... end,
+      choose_literal = function(text) ... end,   -- <C-j>
+      preview        = function(it, target_win) ... end,  -- <Tab>
+
+      -- Optional "live" mode: the source owns filtering. Query changes
+      -- are debounced and dispatched to `refresh(query)` instead of
+      -- the built-in matcher.
+      live           = false,
+      refresh        = function(query) ... end,
+    }
+<
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

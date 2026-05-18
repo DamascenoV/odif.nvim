@@ -4,6 +4,7 @@
 
 return {
   name = 'help',
+  prompt = 'Help topic: ',
   items = function(set)
     local seen, out = {}, {}
     for _, tagfile in ipairs(vim.api.nvim_get_runtime_file('doc/tags', true)) do

@@ -3,6 +3,7 @@
 
 return {
   name = 'oldfiles',
+  prompt = 'Recent file: ',
   items = function(set)
     local cwd = vim.fn.getcwd()
     local out = {}

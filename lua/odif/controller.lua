@@ -99,50 +99,102 @@ local function splice(state, a, b, repl)
   rematch(state)
 end
 
+--- Default key → action table. Keys may be either:
+---   - a single raw byte (e.g. '\r', '\27', '\14')
+---   - a `vim.fn.keytrans` form (e.g. '<CR>', '<Down>', '<C-x>')
+--- Users override this via `config.mappings`.
+local DEFAULT_MAPPINGS = {
+  -- Control bytes
+  ['\27'] = 'abort', -- <Esc>
+  ['\3'] = 'abort', -- <C-c>
+  ['\10'] = 'choose_literal', -- <C-j>  (fido M-j parity)
+  ['\r'] = 'choose', -- <CR>
+  ['\t'] = 'preview_toggle', -- <Tab>
+  ['\8'] = 'bs',
+  ['\127'] = 'bs',
+  ['\14'] = 'next', -- <C-n>
+  ['\16'] = 'prev', -- <C-p>
+  ['\19'] = 'next', -- <C-s>  (fido)
+  ['\18'] = 'prev', -- <C-r>  (fido)
+  ['\21'] = 'clear', -- <C-u>
+  ['\23'] = 'word_back', -- <C-w>
+  ['\4'] = 'choose_literal', -- <C-d>  (fido)
+
+  -- keytrans forms
+  ['<Down>'] = 'next',
+  ['<Up>'] = 'prev',
+  ['<Right>'] = 'caret_right',
+  ['<Left>'] = 'caret_left',
+  ['<Home>'] = 'caret_home',
+  ['<End>'] = 'caret_end',
+  ['<BS>'] = 'bs',
+  ['<Del>'] = 'del',
+  ['<CR>'] = 'choose',
+  ['<Esc>'] = 'abort',
+  ['<C-Home>'] = 'first',
+  ['<C-End>'] = 'last',
+  ['<Tab>'] = 'preview_toggle',
+}
+
+--- Canonicalize a mapping key. Raw bytes pass through. keytrans forms
+--- (e.g. `<C-x>`) are round-tripped through nvim_replace_termcodes +
+--- keytrans so we always store the form keytrans will actually emit at
+--- classification time (e.g. `<C-X>` with uppercase letter).
+---@param key string
+---@return string
+local function normalize_key(key)
+  if type(key) ~= 'string' or key == '' then return key end
+  if key:sub(1, 1) ~= '<' then return key end
+  local ok, raw = pcall(vim.api.nvim_replace_termcodes, key, true, true, true)
+  if not ok or raw == '' or raw == key then return key end
+  local ok2, k2 = pcall(vim.fn.keytrans, raw)
+  if not ok2 or type(k2) ~= 'string' or k2 == '' then return key end
+  return k2
+end
+
+--- Build the effective key→action table by merging user overrides on top
+--- of the defaults. A user value of `false` removes a binding.
+---@param user_mappings table<string, string|false>|nil
+local function build_mappings(user_mappings)
+  local out = {}
+  for k, v in pairs(DEFAULT_MAPPINGS) do
+    out[normalize_key(k)] = v
+  end
+  for k, v in pairs(user_mappings or {}) do
+    local nk = normalize_key(k)
+    if v == false then
+      out[nk] = nil
+    else
+      out[nk] = v
+    end
+  end
+  return out
+end
+
 --- Translate a getcharstr() result into a logical action name.
 ---@param ch string
+---@param mappings table<string, string>
 ---@return string action, string|nil insert_char
-local function classify(ch)
+local function classify(ch, mappings)
   if ch == '' then return 'noop' end
-  -- Handle terminal/control bytes.
-  local b = ch:byte(1)
-  if ch == '\27' then return 'abort' end -- <Esc>
-  if ch == '\3' then return 'abort' end -- <C-c>
-  -- NB: \n (0x0a) is <C-j>, not <CR>. fido binds it to choose_literal.
-  if ch == '\10' then return 'choose_literal' end -- <C-j>  (fido M-j parity)
-  if ch == '\r' then return 'choose' end -- <CR>
-  if ch == '\t' then return 'preview_toggle' end -- <Tab>
-  if ch == '\8' or ch == '\127' then return 'bs' end
-  if ch == '\14' then return 'next' end -- <C-n>
-  if ch == '\16' then return 'prev' end -- <C-p>
-  if ch == '\19' then return 'next' end -- <C-s>  (fido)
-  if ch == '\18' then return 'prev' end -- <C-r>  (fido)
-  if ch == '\21' then return 'clear' end -- <C-u>
-  if ch == '\23' then return 'word_back' end -- <C-w>
-  if ch == '\4' then return 'choose_literal' end -- <C-d>  (fido)
-
-  -- Multi-byte / special keys returned by getcharstr() as <80>... sequences
-  -- come back from vim.fn.keytrans for legibility.
+  -- 1) Raw byte lookup (covers control chars and bare ASCII).
+  local act = mappings[ch]
+  if act then return act end
+  -- 2) keytrans lookup for special keys (<Down>, <C-x>, …).
   local k = vim.fn.keytrans(ch)
-  if k == '<Down>' then return 'next' end
-  if k == '<Up>' then return 'prev' end
-  if k == '<Right>' then return 'caret_right' end -- caret in query
-  if k == '<Left>' then return 'caret_left' end -- caret in query
-  if k == '<Home>' then return 'caret_home' end
-  if k == '<End>' then return 'caret_end' end
-  if k == '<BS>' then return 'bs' end
-  if k == '<Del>' then return 'del' end
-  if k == '<CR>' then return 'choose' end
-  if k == '<Esc>' then return 'abort' end
-  if k == '<C-Home>' then return 'first' end
-  if k == '<C-End>' then return 'last' end
-
-  -- Anything else printable goes into the query.
-  if b and b >= 0x20 and b < 0x7f then return 'insert', ch end
-  -- UTF-8 lead bytes too.
+  act = mappings[k]
+  if act then return act end
+  -- 3) Insert printable / UTF-8 lead bytes into the query.
+  local b = ch:byte(1)
+  if b and (b >= 0x20 and b < 0x7f) then return 'insert', ch end
   if b and b >= 0x80 then return 'insert', ch end
   return 'noop'
 end
+
+-- Exposed for tests.
+M._classify = classify
+M._build_mappings = build_mappings
+M._DEFAULT_MAPPINGS = DEFAULT_MAPPINGS
 
 ---@param source odif.Source
 ---@param config table
@@ -198,13 +250,14 @@ function M.run(source, config, opts)
   rematch(state)
   render.paint(state)
 
+  local mappings = build_mappings(config.mappings)
   local chosen ---@type any|nil
 
   while not state.aborted do
     -- getcharstr yields to the event loop, processing scheduled callbacks.
     local ok, ch = pcall(vim.fn.getcharstr)
     if not ok then break end
-    local action, arg = classify(ch)
+    local action, arg = classify(ch, mappings)
 
     if action == 'abort' then
       break

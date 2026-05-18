@@ -19,6 +19,7 @@ end
 
 return {
   name = 'grep',
+  prompt = 'Grep: ',
   live = true,
 
   items = function(set) set({}) end, -- start empty; refresh fills it

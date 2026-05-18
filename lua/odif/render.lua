@@ -10,11 +10,25 @@
 
 local M = {}
 
+--- Resolve the prompt string for a session:
+---   1. `source.prompt` if set
+---   2. `<source.name>: ` if `cfg.prompt_from_source` is true and name exists
+---   3. `cfg.prompt`
+---@param state odif.State
+---@return string
+function M.prompt_for(state)
+  local src = state.source
+  local cfg = state.config
+  if src and src.prompt and src.prompt ~= '' then return src.prompt end
+  if cfg.prompt_from_source and src and src.name and src.name ~= '' then return src.name .. ': ' end
+  return cfg.prompt
+end
+
 ---@param state odif.State
 function M.paint(state)
   local ctx = state.ctx
   local cfg = state.config
-  local prompt = cfg.prompt
+  local prompt = M.prompt_for(state)
   local query = state.query
   local max_height = math.max(1, cfg.max_height or 2)
 
@@ -110,7 +124,9 @@ function M.paint(state)
     if right < #matches then push(' …', cfg.hl.overflow) end
 
     -- Match count: "M/N" like Emacs fido.
-    if #matches > 0 then push(' ' .. cur .. '/' .. #matches, cfg.hl.overflow) end
+    if cfg.show_count ~= false and #matches > 0 then
+      push(' ' .. cur .. '/' .. #matches, cfg.hl.overflow)
+    end
   end
 
   -- 4) Place chunks as ONE inline virt_text run after the typed query.
@@ -138,7 +154,7 @@ end
 function M.paint_prompt_only(state)
   local ctx = state.ctx
   local cfg = state.config
-  local prompt = cfg.prompt
+  local prompt = M.prompt_for(state)
   local query = state.query
   local line = prompt .. query
 

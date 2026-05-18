@@ -14,6 +14,7 @@ end
 
 return {
   name = 'files',
+  prompt = 'Find file: ',
   items = function(set)
     -- Bring the picker up empty, then stream the listing in.
     set({})

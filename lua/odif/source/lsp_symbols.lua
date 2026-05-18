@@ -24,6 +24,7 @@ end
 
 return {
   name = 'lsp_symbols',
+  prompt = 'Symbol: ',
   items = function(set)
     local bufnr = vim.api.nvim_get_current_buf()
     local clients = vim.lsp.get_clients({ bufnr = bufnr, method = 'textDocument/documentSymbol' })
