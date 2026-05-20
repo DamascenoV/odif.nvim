@@ -37,6 +37,10 @@ M.config = {
   -- Maximum number of cmdline rows the picker is allowed to expand to.
   -- Honour the same value you pass to ui2's `msg.cmd.height`.
   max_height = 2,
+  -- Per-item display cap, in display cells. Long items (e.g. grep lines)
+  -- are truncated with `…` so multiple results still fit on the strip.
+  -- Matching still uses the full text. Set to 0 / false to disable.
+  max_item_width = 60,
   hl = {
     prompt = 'Question',
     query = 'Normal',

@@ -127,6 +127,7 @@ All bindings are configurable via `config.mappings`; see |odif-config|.
       separator = ' │ ',
       show_count = true,           -- trailing M/N counter
       max_height = 2,              -- cmdline rows the strip can wrap to
+      max_item_width = 60,         -- truncate long items with '…' (0 = off)
 
       hl = {
         prompt   = 'Question',

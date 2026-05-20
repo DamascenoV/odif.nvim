@@ -347,6 +347,9 @@ function M.run(source, config, opts)
     pcall(vim.api.nvim_win_set_cursor, state.target_win, state.target_pos)
   end
 
+  -- Tear down the scratch preview buffer (if any).
+  require('odif.preview').dispose()
+
   bridge.release(ctx)
   require('odif')._active = nil
 

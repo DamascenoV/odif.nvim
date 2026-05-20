@@ -29,7 +29,6 @@ return {
   end,
   preview = function(it, target_win)
     if not it or it == '' then return end
-    if vim.fn.filereadable(it) ~= 1 then return end
-    vim.api.nvim_win_call(target_win, function() vim.cmd('edit ' .. vim.fn.fnameescape(it)) end)
+    require('odif.preview').show(target_win, it, 1, 1)
   end,
 }

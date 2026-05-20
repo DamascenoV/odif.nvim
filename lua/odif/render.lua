@@ -10,6 +10,27 @@
 
 local M = {}
 
+--- Truncate `s` to at most `max` display cells, appending `…` if cut.
+--- Returns `s` unchanged when `max` is falsy/<=0 or the string already fits.
+---@param s string
+---@param max integer|nil
+---@return string
+local function truncate(s, max)
+  if not max or max <= 0 then return s end
+  if vim.fn.strdisplaywidth(s) <= max then return s end
+  -- Walk forward by display cells, character by character.
+  local chars = vim.fn.split(s, '\\zs')
+  local out, width = {}, 0
+  local cap = max - 1 -- leave room for the ellipsis
+  for _, ch in ipairs(chars) do
+    local w = vim.fn.strdisplaywidth(ch)
+    if width + w > cap then break end
+    out[#out + 1] = ch
+    width = width + w
+  end
+  return table.concat(out) .. '…'
+end
+
 --- Resolve the prompt string for a session:
 ---   1. `source.prompt` if set
 ---   2. `<source.name>: ` if `cfg.prompt_from_source` is true and name exists
@@ -77,10 +98,16 @@ function M.paint(state)
   if #matches == 0 then
     push((' '):rep(gap) .. '(no match)', cfg.hl.overflow)
   else
+    -- Per-item display cap. Long lines (e.g. grep output) get truncated so
+    -- multiple results still fit on the strip; matching still uses the
+    -- full string in `stritems`.
+    local cap = cfg.max_item_width
+    local function disp(idx) return truncate(stritems[matches[idx]], cap) end
+
     -- Greedy outward expansion centred on the current match, just like
     -- Emacs fido — keeps the current candidate visible as you cycle.
     local left, right = cur, cur
-    local function w_of(idx) return vim.fn.strdisplaywidth(stritems[matches[idx]]) end
+    local function w_of(idx) return vim.fn.strdisplaywidth(disp(idx)) end
 
     local total = w_of(cur)
     while total < budget and (left > 1 or right < #matches) do
@@ -114,7 +141,7 @@ function M.paint(state)
     -- Current match: highlighted with cfg.hl.current (PmenuSel by default).
     for i = left, right do
       if i > left then push(sep, cfg.hl.overflow) end
-      local s = stritems[matches[i]]
+      local s = disp(i)
       if i == cur then
         push(s, cfg.hl.current)
       else

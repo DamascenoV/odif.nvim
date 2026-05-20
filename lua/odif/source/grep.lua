@@ -59,11 +59,7 @@ return {
 
   preview = function(it, target_win)
     local m = type(it) == 'string' and parse(it) or it
-    if not m or not m.file or vim.fn.filereadable(m.file) ~= 1 then return end
-    vim.api.nvim_win_call(target_win, function()
-      vim.cmd('edit ' .. vim.fn.fnameescape(m.file))
-      pcall(vim.api.nvim_win_set_cursor, 0, { m.lnum, math.max(0, m.col - 1) })
-      vim.cmd('normal! zz')
-    end)
+    if not m or not m.file then return end
+    require('odif.preview').show(target_win, m.file, m.lnum, m.col)
   end,
 }
