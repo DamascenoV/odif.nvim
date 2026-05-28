@@ -51,10 +51,36 @@ end
 ---@param desired integer
 function M.set_height(ctx, desired)
   local want = math.max(desired, ctx.saved.cmdheight, 1)
-  if vim.api.nvim_win_get_height(ctx.win) ~= want then pcall(vim.api.nvim_win_set_height, ctx.win, want) end
-  if vim.o.cmdheight ~= want then
-    -- Mirror ui2's own pattern: keep cursor stable, suppress autocmds.
-    vim._with({ noautocmd = true, o = { splitkeep = 'screen' } }, function() vim.o.cmdheight = want end)
+  local old_height = vim.api.nvim_win_get_height(ctx.win)
+  local old_cmdheight = vim.o.cmdheight
+  local shrinking = old_height > want or old_cmdheight > want
+
+  local function set_cmdheight()
+    if vim.o.cmdheight ~= want then
+      -- Mirror ui2's own pattern: keep cursor stable, suppress autocmds.
+      vim._with({ noautocmd = true, o = { splitkeep = 'screen' } }, function() vim.o.cmdheight = want end)
+    end
+  end
+
+  local function set_win_height()
+    if vim.api.nvim_win_get_height(ctx.win) ~= want then
+      -- The ui2 command window is configured as a special external/floating
+      -- window, so update its config height directly. nvim_win_set_height()
+      -- can leave the old bottom row visually stale after a shrink.
+      pcall(vim.api.nvim_win_set_config, ctx.win, { hide = false, height = want })
+    end
+  end
+
+  if shrinking then
+    -- Release the screen row first, then resize the ui2 window into it.
+    set_cmdheight()
+    set_win_height()
+    pcall(vim.cmd, 'redraw!')
+  else
+    -- Reserve rows first when growing so the command window does not
+    -- briefly overlap the statusline.
+    set_win_height()
+    set_cmdheight()
   end
 end
 

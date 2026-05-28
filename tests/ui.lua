@@ -56,13 +56,10 @@ local current_hl = odif.config.hl.current
 local has_current, current_text = false, nil
 for _, m in ipairs(marks) do
   local d = m[4]
-  if d and d.virt_text then
-    for _, vt in ipairs(d.virt_text) do
-      if vt[2] == current_hl then
-        has_current = true
-        current_text = vt[1]
-      end
-    end
+  if d and d.hl_group == current_hl then
+    has_current = true
+    local row = m[2] + 1
+    current_text = lines[row]:sub(m[3] + 1, d.end_col)
   end
 end
 if not has_current then bail('no chunk highlighted with ' .. current_hl) end

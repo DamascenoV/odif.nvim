@@ -3,10 +3,8 @@
 ---   row 1: <prompt><query>  m1 │ [current] │ m2 │ m3 │ m4 │ …
 ---   row 2: │ m5 │ m6 │ m7 │ m8 │ … (continues if max_height > 1)
 ---
---- All candidate chunks are laid out as a single inline virt_text run
---- after the typed query; the cmd window has wrap=true (set by ui2),
---- so the run wraps visually. We grow the cmd window to fit the
---- wrapped text height, capped at `cfg.max_height`.
+--- Candidate chunks are materialised as real cmd-buffer lines (instead
+--- of wrapped inline virtual text) so ui2 clipping stays deterministic.
 
 local M = {}
 
@@ -53,31 +51,13 @@ function M.paint(state)
   local query = state.query
   local max_height = math.max(1, cfg.max_height or 2)
 
-  -- 1) Prompt + query line.
   local line = prompt .. query
-  vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, { line })
+  local caret = state.caret or (#query + 1)
 
-  -- 2) Reset extmarks.
+  -- Reset extmarks. Lines are replaced after the candidate strip is built.
   vim.api.nvim_buf_clear_namespace(ctx.buf, ctx.ns, 0, -1)
 
-  -- Highlight prompt.
-  vim.api.nvim_buf_set_extmark(ctx.buf, ctx.ns, 0, 0, {
-    end_col = #prompt,
-    hl_group = state.busy and cfg.hl.busy or cfg.hl.prompt,
-    invalidate = true,
-    undo_restore = false,
-  })
-
-  -- Mid-string caret marker.
-  local caret = state.caret or (#query + 1)
-  if caret <= #query then
-    vim.api.nvim_buf_set_extmark(ctx.buf, ctx.ns, 0, #prompt + caret - 1, {
-      virt_text = { { '▏', cfg.hl.prompt } },
-      virt_text_pos = 'inline',
-    })
-  end
-
-  -- 3) Build the candidate strip as a list of {text, hl} chunks.
+  -- Build the candidate strip as a list of {text, hl} chunks.
   local sep = cfg.separator
   local matches = state.matches
   local cur = state.current_ind
@@ -156,18 +136,59 @@ function M.paint(state)
     end
   end
 
-  -- 4) Place chunks as ONE inline virt_text run after the typed query.
-  -- With wrap=true, this wraps onto subsequent rows automatically.
-  vim.api.nvim_buf_set_extmark(ctx.buf, ctx.ns, 0, #line, {
-    virt_text = chunks,
-    virt_text_pos = 'inline',
-  })
+  -- 4) Materialise the strip into real cmd-buffer lines instead of one
+  -- huge inline virtual-text run. ui2 sometimes lets wrapped inline virtual
+  -- text bleed into normal editor rows when a very long strip changes size;
+  -- physical lines keep clipping/height deterministic.
+  local lines = { line }
+  local widths = { prompt_w }
+  local marks = {}
+  local function append_chunk(text, hl)
+    if text == '' then return end
+    local width = vim.fn.strdisplaywidth(text)
+    local row = #lines
+    if widths[row] > 0 and widths[row] + width > win_w and row < max_height then
+      lines[#lines + 1] = ''
+      widths[#widths + 1] = 0
+      row = #lines
+    end
+    local col = #lines[row]
+    lines[row] = lines[row] .. text
+    widths[row] = widths[row] + width
+    if hl and hl ~= 'Normal' then marks[#marks + 1] = { row = row - 1, col = col, end_col = col + #text, hl = hl } end
+  end
+  for _, chunk in ipairs(chunks) do
+    append_chunk(chunk[1], chunk[2])
+  end
 
-  -- 5) Grow the cmd window to fit, capped at max_height. Goes through
-  -- the bridge so the user's cmdheight is honoured as the lower bound.
-  local height = vim.api.nvim_win_text_height(ctx.win, {}).all
-  height = math.min(max_height, math.max(1, height))
-  require('odif.ui2_bridge').set_height(ctx, height)
+  vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, lines)
+
+  -- Highlight prompt and candidates.
+  vim.api.nvim_buf_set_extmark(ctx.buf, ctx.ns, 0, 0, {
+    end_col = #prompt,
+    hl_group = state.busy and cfg.hl.busy or cfg.hl.prompt,
+    invalidate = true,
+    undo_restore = false,
+  })
+  for _, mark in ipairs(marks) do
+    vim.api.nvim_buf_set_extmark(ctx.buf, ctx.ns, mark.row, mark.col, {
+      end_col = mark.end_col,
+      hl_group = mark.hl,
+      invalidate = true,
+      undo_restore = false,
+    })
+  end
+
+  -- Mid-string caret marker.
+  if caret <= #query then
+    vim.api.nvim_buf_set_extmark(ctx.buf, ctx.ns, 0, #prompt + caret - 1, {
+      virt_text = { { '▏', cfg.hl.prompt } },
+      virt_text_pos = 'inline',
+    })
+  end
+
+  -- 5) Grow/shrink to the exact number of materialised lines.
+  require('odif.ui2_bridge').set_height(ctx, #lines)
 
   -- 6) Real cursor at caret position inside the query.
   local cursor_col = #prompt + (caret - 1)
@@ -185,11 +206,13 @@ function M.paint_prompt_only(state)
   local query = state.query
   local line = prompt .. query
 
-  -- Replace just the first row of the cmd buffer.
-  vim.api.nvim_buf_set_lines(ctx.buf, 0, 1, false, { line })
+  -- Replace the whole cmd buffer. Old candidate rows must be removed here;
+  -- otherwise a live source can leave stale physical rows while the next
+  -- process is still spawning.
+  vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, { line })
+  require('odif.ui2_bridge').set_height(ctx, 1)
 
-  -- Reset extmarks on row 0 only, then re-add prompt + caret marks.
-  -- We can't clear by row, so we clear our entire ns and re-apply them.
+  -- Reset extmarks, then re-add prompt + caret marks.
   vim.api.nvim_buf_clear_namespace(ctx.buf, ctx.ns, 0, -1)
   vim.api.nvim_buf_set_extmark(ctx.buf, ctx.ns, 0, 0, {
     end_col = #prompt,
