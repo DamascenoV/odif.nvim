@@ -2,14 +2,18 @@
 --- to `fd` then `find`. Streams stdout asynchronously into the picker
 --- so the prompt is responsive even on huge repos.
 
+local command
+
 local function pick_command()
+  if command then return command end
   if vim.fn.executable('rg') == 1 then
-    return { 'rg', '--files', '--hidden', '--glob', '!.git' }
+    command = { 'rg', '--files', '--hidden', '--glob', '!.git' }
   elseif vim.fn.executable('fd') == 1 then
-    return { 'fd', '--type', 'f', '--hidden', '--exclude', '.git' }
+    command = { 'fd', '--type', 'f', '--hidden', '--exclude', '.git' }
   else
-    return { 'find', '.', '-type', 'f', '-not', '-path', '*/.git/*' }
+    command = { 'find', '.', '-type', 'f', '-not', '-path', '*/.git/*' }
   end
+  return command
 end
 
 return {
@@ -20,7 +24,6 @@ return {
     set({})
     vim.schedule(function() require('odif').set_items_from_cli(pick_command()) end)
   end,
-  format_item = function(it) return it end,
   choose = function(it)
     if it and it ~= '' then vim.cmd.edit(vim.fn.fnameescape(it)) end
   end,

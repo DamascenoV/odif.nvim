@@ -5,6 +5,7 @@
 
 local bridge = require('odif.ui2_bridge')
 local render = require('odif.render')
+local util = require('odif.util')
 
 local M = {}
 
@@ -40,11 +41,7 @@ local function project(items, format)
   format = format or tostring
   local out = {}
   for i, it in ipairs(items) do
-    if type(it) == 'string' then
-      out[i] = it
-    else
-      out[i] = format(it)
-    end
+    out[i] = util.project_one({ format_item = format }, it)
   end
   return out
 end
@@ -328,11 +325,7 @@ function M.run(source, config, opts)
 
   if state._spawn then pcall(state._spawn.kill) end
   for _, key in ipairs({ '_refresh_timer', '_paint_timer' }) do
-    local t = state[key]
-    if t and not t:is_closing() then
-      pcall(t.stop, t)
-      pcall(t.close, t)
-    end
+    util.safe_close_timer(state[key])
     state[key] = nil
   end
 

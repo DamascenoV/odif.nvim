@@ -1,7 +1,15 @@
---- Fuzzy matcher. Synchronous v0 — bucket-sorted by (width, start).
+--- Fuzzy matcher. Synchronous v0 — sorted by (width, start).
 --- Lifted from mini.pick's algorithm, simplified.
 
+local util = require('odif.util')
+
 local M = {}
+
+local function hit_less(a, b)
+  if a[1] ~= b[1] then return a[1] < b[1] end
+  if a[2] ~= b[2] then return a[2] < b[2] end
+  return a[3] < b[3]
+end
 
 --- Find the smallest window in `s` containing all chars of `query` in order.
 ---@param s string lowercased candidate
@@ -61,24 +69,12 @@ end
 ---@param ignorecase boolean
 ---@return integer[] indices
 function M.run(stritems, query, ignorecase)
-  if query == '' then
-    local out = {}
-    for i = 1, #stritems do
-      out[i] = i
-    end
-    return out
-  end
+  if query == '' then return util.make_identity(#stritems) end
 
   local q = ignorecase and query:lower() or query
   -- Strip whitespace for v0 (no grouped queries yet).
   q = q:gsub('%s+', '')
-  if q == '' then
-    local out = {}
-    for i = 1, #stritems do
-      out[i] = i
-    end
-    return out
-  end
+  if q == '' then return util.make_identity(#stritems) end
 
   local hits = {} -- { {width, start, idx} }
   local max_w, max_s = 0, 0
@@ -92,12 +88,7 @@ function M.run(stritems, query, ignorecase)
     end
   end
 
-  -- Bucket sort by width then start (stable, O(n)).
-  table.sort(hits, function(a, b)
-    if a[1] ~= b[1] then return a[1] < b[1] end
-    if a[2] ~= b[2] then return a[2] < b[2] end
-    return a[3] < b[3]
-  end)
+  table.sort(hits, hit_less)
 
   local out = {}
   for i, h in ipairs(hits) do
@@ -128,11 +119,7 @@ function M.run_async(stritems, query, ignorecase, opts, on_done)
   if q == '' then
     vim.schedule(function()
       if stale() then return end
-      local out = {}
-      for i = 1, #stritems do
-        out[i] = i
-      end
-      on_done(out)
+      on_done(util.make_identity(#stritems))
     end)
     return { cancel = function() end }
   end
@@ -152,11 +139,7 @@ function M.run_async(stritems, query, ignorecase, opts, on_done)
     i = stop + 1
     if i > #stritems then
       if cancelled or stale() then return end
-      table.sort(hits, function(a, b)
-        if a[1] ~= b[1] then return a[1] < b[1] end
-        if a[2] ~= b[2] then return a[2] < b[2] end
-        return a[3] < b[3]
-      end)
+      table.sort(hits, hit_less)
       local out = {}
       for k, h in ipairs(hits) do
         out[k] = h[3]

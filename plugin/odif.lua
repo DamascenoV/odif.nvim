@@ -1,4 +1,4 @@
-if vim.g.loaded_odif then return end
+if vim.g.loaded_odif or vim.g.odif_disable then return end
 vim.g.loaded_odif = 1
 
 if vim.fn.has('nvim-0.12') ~= 1 then

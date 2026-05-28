@@ -1,13 +1,6 @@
 --- Builtin source: list listed buffers.
 
---- Format `path` relative to `cwd` if it lives under it; otherwise return
---- the home-shortened absolute path so $HOME shows as ~.
-local function display_path(path, cwd)
-  if path == '' then return path end
-  local prefix = cwd:sub(-1) == '/' and cwd or (cwd .. '/')
-  if path:sub(1, #prefix) == prefix then return path:sub(#prefix + 1) end
-  return vim.fn.fnamemodify(path, ':~')
-end
+local util = require('odif.util')
 
 return {
   name = 'buffers',
@@ -18,7 +11,7 @@ return {
     for _, b in ipairs(vim.api.nvim_list_bufs()) do
       if vim.api.nvim_buf_is_loaded(b) and vim.bo[b].buflisted then
         local full = vim.api.nvim_buf_get_name(b)
-        local display = full == '' and ('[No Name #%d]'):format(b) or display_path(full, cwd)
+        local display = full == '' and ('[No Name #%d]'):format(b) or util.display_path(full, cwd)
         items[#items + 1] = { bufnr = b, name = display, path = full }
       end
     end

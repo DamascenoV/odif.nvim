@@ -1,6 +1,8 @@
 --- Builtin source: recently opened files (vim.v.oldfiles), filtered to
 --- those that still exist on disk. Synchronous and fast.
 
+local util = require('odif.util')
+
 return {
   name = 'oldfiles',
   prompt = 'Recent file: ',
@@ -9,10 +11,7 @@ return {
     local out = {}
     for _, f in ipairs(vim.v.oldfiles or {}) do
       if f and f ~= '' and vim.fn.filereadable(f) == 1 then
-        -- Show paths relative to cwd when applicable for readability.
-        local display = f
-        if f:sub(1, #cwd) == cwd then display = f:sub(#cwd + 2) end
-        out[#out + 1] = { path = f, display = display }
+        out[#out + 1] = { path = f, display = util.display_path(f, cwd) }
       end
     end
     set(out)
