@@ -19,6 +19,20 @@ assert(sources.grep.live == true, 'grep should be live')
 assert(type(sources.grep.refresh) == 'function', 'grep needs refresh()')
 local fmt = sources.grep.format_item('foo.lua:42:7:print(x)')
 assert(fmt == 'foo.lua:42:7:print(x)', 'grep.format_item identity for strings')
+local qf = sources.grep.quickfix_item('foo.lua:42:7:print(x)')
+assert(qf.filename == 'foo.lua' and qf.lnum == 42 and qf.col == 7, 'grep quickfix parse failed')
+local util = require('odif.util')
+local globs = util.build_globs({ glob = 'lua/**', filetypes = { 'lua', '.md' } })
+assert(vim.deep_equal(globs, { 'lua/**', '*.lua', '*.md' }), 'glob builder failed')
+assert(util.matches_glob('foo.json', '*.json'), 'glob should match extension')
+assert(not util.matches_glob('foo.js', '*.json'), 'glob should reject other extension')
+local filtered = util.apply_glob_filter({
+  filter_glob = '*.json',
+  source = sources.files,
+  items = { 'foo.js', 'foo.json' },
+  stritems = { 'foo.js', 'foo.json' },
+}, { 1, 2 })
+assert(vim.deep_equal(filtered, { 2 }), 'interactive glob filter failed')
 
 for name, src in pairs(sources) do
   assert(type(src) == 'table', 'source ' .. name .. ' not table')
@@ -26,6 +40,7 @@ for name, src in pairs(sources) do
   assert(type(src.items) == 'function', name .. ' missing items()')
   assert(type(src.format_item or tostring) == 'function', name .. ' bad format_item')
   assert(type(src.choose) == 'function' or src.choose == nil, name .. ' bad choose')
+  assert(type(src.quickfix_item) == 'function' or src.quickfix_item == nil, name .. ' bad quickfix_item')
 end
 print('shape OK for all 6 sources')
 

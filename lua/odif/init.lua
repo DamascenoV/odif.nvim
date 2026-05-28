@@ -19,6 +19,8 @@ local M = {}
 ---@field live? boolean If true, query changes go to `refresh` instead of
 ---  the local matcher; the source owns filtering.
 ---@field refresh? fun(query: string) Required for live sources.
+---@field quickfix_item? fun(item: any): table|nil Convert an item to quickfix.
+---@field filter_text? fun(item: any): string Text/path used by interactive glob filtering.
 
 ---@class odif.Config
 ---@field prompt string                Default prompt; overridden by `source.prompt`.
@@ -29,6 +31,8 @@ local M = {}
 ---@field max_height integer           Max cmdline rows for the strip.
 ---@field hl table<string, string>
 ---@field delay { busy: integer, async: integer, live: integer, paint: integer }
+---@field files { glob?: string|string[], filetypes?: string|string[] }
+---@field grep { min_query?: integer, glob?: string|string[], filetypes?: string|string[] }
 ---@field mappings table<string, string>  Map of key (literal char or `<C-x>`
 ---  keytrans form) to action name. Overrides built-in defaults.
 
@@ -54,6 +58,11 @@ M.config = {
     busy = 'WarningMsg',
   },
   delay = { busy = 80, async = 10, live = 120, paint = 60 },
+  -- Optional built-in source filters. Examples:
+  --   files = { filetypes = { 'lua', 'md' } }
+  --   grep = { glob = { '*.lua', 'lua/**' }, min_query = 3 }
+  files = {},
+  grep = { min_query = 2 },
   -- User overrides; merged on top of the defaults in odif.controller.
   -- Example: { ['<C-x>'] = 'choose_literal', ['<C-l>'] = 'clear' }
   mappings = {},
@@ -151,11 +160,8 @@ function M._refresh(state)
       )
     end
 
-    -- Identity match over current items.
-    state.matches = {}
-    for i = 1, #state.stritems do
-      state.matches[i] = i
-    end
+    -- Identity match over current items, then optional interactive glob filter.
+    state.matches = util.apply_glob_filter(state, util.make_identity(#state.stritems))
     if #state.matches == 0 then
       state.current_ind = 0
     else
@@ -184,11 +190,11 @@ function M._refresh(state)
     is_stale = function() return state.querytick ~= qt or #state.stritems ~= count end,
   }, function(matches)
     if state.querytick ~= qt or #state.stritems ~= count then return end
-    state.matches = matches
-    if #matches == 0 then
+    state.matches = util.apply_glob_filter(state, matches)
+    if #state.matches == 0 then
       state.current_ind = 0
     else
-      state.current_ind = math.min(math.max(1, state.current_ind), #matches)
+      state.current_ind = math.min(math.max(1, state.current_ind), #state.matches)
       if state.current_ind == 0 then state.current_ind = 1 end
     end
     render.paint(state)

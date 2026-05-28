@@ -63,11 +63,25 @@ Or use the `:Odif` command: `:Odif files`, `:Odif grep`, `:Odif resume`, …
 | `<C-p>` `<Up>` `<C-r>`             | prev match                      |
 | `<C-Home>` / `<C-End>`             | first / last match              |
 | `<CR>`                             | choose current match            |
+| `<C-q>`                            | send current results to quickfix |
+| `<C-o>`                            | filter current results by glob  |
 | `<C-j>` / `<C-d>`                  | accept literal query            |
 | `<Tab>`                            | toggle preview                  |
 | `<Esc>` / `<C-c>`                  | abort                           |
 
 All bindings are configurable via `config.mappings`; see `:help odif-config`.
+
+While the picker is open, press `<C-o>` and enter a glob such as `*.json`
+to filter the current results. Submit an empty glob to clear it.
+
+Built-in `files` and `grep` can also be constrained up-front by extension/glob:
+
+```lua
+require('odif').setup({
+  files = { filetypes = { 'lua', 'md' }, glob = 'lua/**' },
+  grep = { filetypes = 'lua', min_query = 2 },
+})
+```
 
 ## Tests
 

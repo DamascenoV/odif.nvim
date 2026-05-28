@@ -32,6 +32,7 @@ local M = {}
 ---@field _refresh_timer any|nil    -- uv_timer_t
 ---@field _paint_timer any|nil      -- uv_timer_t
 ---@field _live_querytick integer|nil
+---@field filter_glob string|nil
 
 --- Build string projections for items.
 ---@param items any[]
@@ -116,6 +117,8 @@ local DEFAULT_MAPPINGS = {
   ['\21'] = 'clear', -- <C-u>
   ['\23'] = 'word_back', -- <C-w>
   ['\4'] = 'choose_literal', -- <C-d>  (fido)
+  ['\17'] = 'quickfix', -- <C-q>
+  ['\15'] = 'glob_filter', -- <C-o>
 
   -- keytrans forms
   ['<Down>'] = 'next',
@@ -131,6 +134,8 @@ local DEFAULT_MAPPINGS = {
   ['<C-Home>'] = 'first',
   ['<C-End>'] = 'last',
   ['<Tab>'] = 'preview_toggle',
+  ['<C-Q>'] = 'quickfix',
+  ['<C-O>'] = 'glob_filter',
 }
 
 --- Canonicalize a mapping key. Raw bytes pass through. keytrans forms
@@ -172,6 +177,49 @@ end
 ---@param ch string
 ---@param mappings table<string, string>
 ---@return string action, string|nil insert_char
+local function default_quickfix_item(item)
+  if type(item) == 'table' then
+    local filename = item.filename or item.file or item.path
+    if filename then
+      return {
+        filename = filename,
+        lnum = item.lnum or item.line or 1,
+        col = item.col or item.column or 1,
+        text = item.text or item.raw or filename,
+      }
+    end
+  elseif type(item) == 'string' and item ~= '' then
+    return { filename = item, lnum = 1, col = 1, text = item }
+  end
+end
+
+local function build_quickfix_items(state)
+  local out = {}
+  local make = state.source.quickfix_item or default_quickfix_item
+  for _, match_idx in ipairs(state.matches or {}) do
+    local qf = make(state.items[match_idx])
+    if qf then out[#out + 1] = qf end
+  end
+  return out
+end
+
+local function prompt_glob_filter(state)
+  local ok, glob = pcall(vim.fn.input, 'Glob > ', state.filter_glob or '')
+  if not ok then return end
+  state.filter_glob = glob ~= '' and glob or nil
+  rematch(state)
+end
+
+local function send_quickfix(items, title)
+  if #items == 0 then
+    vim.notify('[odif] no results can be sent to quickfix', vim.log.levels.WARN)
+    return
+  end
+  vim.fn.setqflist({}, ' ', { title = title, items = items })
+  vim.cmd.copen()
+  vim.notify(('[odif] sent %d result%s to quickfix'):format(#items, #items == 1 and '' or 's'))
+end
+
 local function classify(ch, mappings)
   if ch == '' then return 'noop' end
   -- 1) Raw byte lookup (covers control chars and bare ASCII).
@@ -249,6 +297,7 @@ function M.run(source, config, opts)
 
   local mappings = build_mappings(config.mappings)
   local chosen ---@type any|nil
+  local quickfix_items ---@type table[]|nil
 
   while not state.aborted do
     -- getcharstr yields to the event loop, processing scheduled callbacks.
@@ -266,6 +315,11 @@ function M.run(source, config, opts)
     elseif action == 'choose_literal' then
       if source.choose_literal then source.choose_literal(state.query) end
       break
+    elseif action == 'quickfix' then
+      quickfix_items = build_quickfix_items(state)
+      break
+    elseif action == 'glob_filter' then
+      prompt_glob_filter(state)
     elseif action == 'insert' then
       splice(state, state.caret, state.caret, arg)
     elseif action == 'bs' then
@@ -346,6 +400,7 @@ function M.run(source, config, opts)
   bridge.release(ctx)
   require('odif')._active = nil
 
+  if quickfix_items then send_quickfix(quickfix_items, 'odif: ' .. (source.name or 'results')) end
   if chosen ~= nil and source.choose then source.choose(chosen) end
   return chosen, { query = state.query }
 end

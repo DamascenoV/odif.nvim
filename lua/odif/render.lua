@@ -51,7 +51,8 @@ function M.paint(state)
   local query = state.query
   local max_height = math.max(1, cfg.max_height or 2)
 
-  local line = prompt .. query
+  local filter_label = state.filter_glob and (' ‹' .. state.filter_glob .. '›') or ''
+  local line = prompt .. query .. filter_label
   local caret = state.caret or (#query + 1)
 
   -- Reset extmarks. Lines are replaced after the candidate strip is built.
@@ -204,7 +205,8 @@ function M.paint_prompt_only(state)
   local cfg = state.config
   local prompt = M.prompt_for(state)
   local query = state.query
-  local line = prompt .. query
+  local filter_label = state.filter_glob and (' ‹' .. state.filter_glob .. '›') or ''
+  local line = prompt .. query .. filter_label
 
   -- Replace the whole cmd buffer. Old candidate rows must be removed here;
   -- otherwise a live source can leave stale physical rows while the next

@@ -73,7 +73,8 @@ The following built-in sources are registered by |odif.setup()|.
 
                                                           *odif-source-files*
 files       Stream files under cwd. Uses `rg --files`, falls back to
-            `fd`, then `find`. Picks open the file with |:edit|.
+            `fd`, then `find`. Picks open the file with |:edit|. Honours
+            `config.files.glob` and `config.files.filetypes`.
 
                                                         *odif-source-buffers*
 buffers     Listed, loaded buffers. Picks `:buffer <bufnr>`.
@@ -89,6 +90,8 @@ help        All help tags under runtimepath. <CR> opens the tag; <C-j>
 grep        Live ripgrep. Each query change re-spawns `rg` (debounced
             ~120ms). Items are `file:line:col:text`. Live source: the
             local fuzzy matcher is bypassed; ripgrep does the filtering.
+            Honours `config.grep.glob`, `config.grep.filetypes`, and
+            `config.grep.min_query`.
 
                                                     *odif-source-lsp_symbols*
 lsp_symbols Document symbols for the current buffer via LSP.
@@ -110,11 +113,17 @@ Default keys (fido parity):
   <C-p> <Up>   <C-r>                 prev match
   <C-Home> / <C-End>                 first / last match
   <CR>                               choose current match
+  <C-q>                              send current results to quickfix
+  <C-o>                              prompt for a glob filter (`*.json`)
   <C-j> / <C-d>                      accept literal query
   <Tab>                              toggle preview
   <Esc> / <C-c>                      abort
 
 All bindings are configurable via `config.mappings`; see |odif-config|.
+
+Press <C-o> while a picker is open to filter the current result set by a
+file/path glob. For example, search for `foo`, press <C-o>, enter `*.json`,
+and only matching JSON paths remain. Submit an empty glob to clear it.
 
 ==============================================================================
 7. CONFIGURATION                                               *odif-config*
@@ -138,7 +147,13 @@ All bindings are configurable via `config.mappings`; see |odif-config|.
         busy     = 'WarningMsg',
       },
 
-      delay = { busy = 80, async = 10 },
+      delay = { busy = 80, async = 10, live = 120, paint = 60 },
+
+      -- Built-in source filters. `filetypes` is extension-oriented:
+      -- { 'lua', 'md' } means { '*.lua', '*.md' }. Use `glob` for richer
+      -- ripgrep/fd patterns such as 'lua/**'.
+      files = { glob = nil, filetypes = nil },
+      grep = { min_query = 2, glob = nil, filetypes = nil },
 
       -- Per-key overrides. Value is an action name (see |odif-mappings|)
       -- or `false` to remove a default binding.
